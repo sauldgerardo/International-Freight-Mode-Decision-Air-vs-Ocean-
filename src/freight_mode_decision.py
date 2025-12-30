@@ -1,3 +1,47 @@
+"""
+International Freight Mode Decision (Air vs Ocean)
+
+This script:
+- Downloads BTS ocean spot-rate Excel for Shanghai <-> Los Angeles.
+- Generates demo shipment data (dims, weight, SLA, utilization).
+- Computes:
+  - Volumetric weight (kg) = (L * W * H) / 6000 using cm (air freight convention).
+  - Chargeable weight (kg) = max(actual weight, volumetric weight).
+- Estimates:
+  - Air cost using a simple rate-card assumption (USD per chargeable kg + minimum charge).
+  - Ocean cost by allocating BTS $/40ft container cost using a utilization factor.
+- Recommends AIR vs OCEAN based on:
+  1) Whether the mode meets the max transit days, then
+  2) Which mode is cheaper if both meet the SLA.
+- Writes an output CSV with analytics features.
+
+Data source (BTS ocean rates):
+- Page:
+  https://www.bts.gov/browse-statistical-products-and-data/info-gallery/freight-rates-dollars-40-foot-container-east
+- Excel:
+  https://www.bts.gov/sites/bts.dot.gov/files/2025-04/F4_23_Ocean_rates_v3.xlsx
+
+Chargeable weight rule reference (6000 divisor, "higher of actual vs volumetric"):
+- Maersk air cargo chargeable weight explainer:
+  https://www.maersk.com/logistics-explained/transportation-and-freight/2025/03/10/air-cargo-chargeable-weight
+"""
+
+from __future__ import annotations
+
+import io
+import os
+import sys
+from dataclasses import dataclass
+from typing import Tuple
+
+import numpy as np
+import pandas as pd
+import requests
+
+# ---------------------------------------------------------------------
+# Constants / configuration (keep in sync with README)
+# ---------------------------------------------------------------------
+
 BTS_OCEAN_XLSX_URL = "https://www.bts.gov/sites/bts.dot.gov/files/2025-04/F4_23_Ocean_rates_v3.xlsx"
 
 # Sheet names observed in the BTS workbook.
@@ -258,8 +302,10 @@ def main():
 
     results = run_pipeline(shipments)
 
-    out_path = "mode_decisions_output.csv"
-    results.to_csv(out_path, index=False)
+    # Create output directory
+    os.makedirs("data/outputs", exist_ok=True)
+    out_path = "data/outputs/mode_decisions_output.csv"
+        results.to_csv(out_path, index=False)
 
     # Print a small summary
     summary = (
